@@ -69,6 +69,7 @@ const parseUrl = require('parseUrl');
 // const testKEparam = "eyJrbF9lbWFpbCI6ICJjb25ub3J3YmFybGV5QGdtYWlsLmNvbSIsICJrbF9jb21wYW55X2lkIjogIlRwaDNQRCJ9";
 const KL_PUBLIC_KEY = data.public_key;
 const EVENT_DATA = getAllEventData();
+log(EVENT_DATA);
 
 /////////////
 // Helpers //
@@ -93,7 +94,7 @@ const normalizeEventNames = name => {
   } else if (name === "begin_checkout") {
     return "Started Checkout";
   } else if (name === "page_view"){
-    return "Active On Site";
+    return "Page Viewed";
   } else if (name.indexOf("_") > -1) {
     return name.split("_").map(item => item.charAt(0).toUpperCase() + item.slice(1)).join(" ");
   }
@@ -104,15 +105,19 @@ const normalizeEventNames = name => {
 const containsKeOrUtmEmail = url => {
   const parsedUrl = parseUrl(url);
   if (parsedUrl.searchParams._ke){
+    const email = decodePayload(parsedUrl.searchParams._ke).kl_email;
     return {
-      "_ke": parsedUrl.searchParams._ke
+      "email": email
     };
   } else if (parsedUrl.searchParams.utm_email){
+    const email = parsedUrl.searchParams.utm_email;
     return {
-      "utm_email": parsedUrl.searchParams.utm_email
+      "email": email
     };
   } else {
-    return "";
+    return {
+      email: ""
+    };
   }
 };
 
@@ -126,7 +131,7 @@ const sendTrackRequest = payload => {
   return sendHttpRequest(url, (statusCode, headers, body) => {
     setResponseStatus(statusCode);
     setResponseBody(body);
-   }, {headers: {user_agent: 'Klaviyo/GTM-Test'}, method: 'GET', timeout: 500});
+   }, {headers: {user_agent: 'Klaviyo/GTM-Serverside'}, method: 'GET', timeout: 500});
 };
 
 const sendIdentifyRequest = payload => {
@@ -145,14 +150,11 @@ const sendIdentifyRequest = payload => {
 log("starting script");
 
 // if page_location contains _ke identify user and send Active On Site Metric
-if(containsKeOrUtmEmail(EVENT_DATA.page_location) && EVENT_DATA.event_name === "page_view"){
+if(containsKeOrUtmEmail(EVENT_DATA.page_location).email && EVENT_DATA.event_name === "page_view"){
+  log("-- KE or UTM_EMAIL PARAMETER DETECTED IN URL --");
   let email;
-  if (containsKeOrUtmEmail(EVENT_DATA.page_location)._ke){
-    log("-- KE PARAMETER DETECTED IN URL. Tracking Event --");
-    email = decodePayload(containsKeOrUtmEmail(EVENT_DATA.page_location)._ke).kl_email;
-  } else {
-    log("-- UTM EMAIL DETECTED IN URL. Tracking Event --");
-    email = containsKeOrUtmEmail(EVENT_DATA.page_location).utm_email;
+  if (containsKeOrUtmEmail(EVENT_DATA.page_location).email){
+    email = containsKeOrUtmEmail(EVENT_DATA.page_location).email;
   }
 
   const identifyPayload = {
@@ -160,7 +162,7 @@ if(containsKeOrUtmEmail(EVENT_DATA.page_location) && EVENT_DATA.event_name === "
   };
   const activeOnSitePayload = {
     "token": KL_PUBLIC_KEY,
-    "event": "Active On Site",
+    "event": "Page Viewed",
     "customer_properties": {
       "$email": email
     },
@@ -170,11 +172,64 @@ if(containsKeOrUtmEmail(EVENT_DATA.page_location) && EVENT_DATA.event_name === "
   sendIdentifyRequest(identifyPayload);
   sendTrackRequest(activeOnSitePayload);
 } else {
-  log("===============================================");
-  log("No email found. Not sending Klaviyo any data...");
-  log("===============================================");
+   const email = EVENT_DATA.email;
+   const eventPayload = {
+    "token": KL_PUBLIC_KEY,
+    "event": EVENT_DATA.event_name,
+    "customer_properties": {
+      "$email": email
+    },
+    "properties": EVENT_DATA
+  };
+
+  log("=======================================================");
+  log("No email found in URL. Not sending Klaviyo any data...");
+  log("=======================================================");
 }
 
+if (EVENT_DATA["x-ga-mp2-user_properties"].email && EVENT_DATA["x-ga-mp2-user_properties"].id){
+  const email = EVENT_DATA["x-ga-mp2-user_properties"].email;
+  const id = EVENT_DATA["x-ga-mp2-user_properties"].id;
+  log("Customer Email and ID found. Sending Klaviyo an event with $email: " + email + " and $id: " + id);
+  const trackEventPayload = {
+    "token": KL_PUBLIC_KEY,
+    "event": EVENT_DATA.event_name,
+    "customer_properties": {
+      "$email": email,
+      "$id": id
+    },
+    "properties": EVENT_DATA
+  };
+  sendTrackRequest(trackEventPayload);
+} else if (EVENT_DATA["x-ga-mp2-user_properties"].email && !EVENT_DATA["x-ga-mp2-user_properties"].id){
+  const email = EVENT_DATA["x-ga-mp2-user_properties"].email;
+  log("Customer Email found. Sending Klaviyo an event with $email: " + email);
+  const trackEventPayload = {
+    "token": KL_PUBLIC_KEY,
+    "event": EVENT_DATA.event_name,
+    "customer_properties": {
+      "$email": email
+    },
+    "properties": EVENT_DATA
+  };
+  sendTrackRequest(trackEventPayload);
+} else if (!EVENT_DATA["x-ga-mp2-user_properties"].email && EVENT_DATA["x-ga-mp2-user_properties"].id) {
+  const id = EVENT_DATA["x-ga-mp2-user_properties"].id;
+  log("Customer ID found. Sending Klaviyo an event with $id: " + id);
+  const trackEventPayload = {
+    "token": KL_PUBLIC_KEY,
+    "event": EVENT_DATA.event_name,
+    "customer_properties": {
+      "$id": id
+    },
+    "properties": EVENT_DATA
+  };
+  sendTrackRequest(trackEventPayload);
+} else {
+  log("No customer ID or EMAIL found. Not sending Klaviyo any data...");
+}
+
+log("ending script");
 // Call data.gtmOnSuccess when the tag is finished.
 data.gtmOnSuccess();
 
@@ -280,4 +335,4 @@ scenarios: []
 
 ___NOTES___
 
-Created on 2/10/2021, 9:47:52 AM
+Created on 3/2/2021, 3:32:16 PM
