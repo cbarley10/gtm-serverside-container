@@ -172,61 +172,53 @@ if(containsKeOrUtmEmail(EVENT_DATA.page_location).email && EVENT_DATA.event_name
   sendIdentifyRequest(identifyPayload);
   sendTrackRequest(activeOnSitePayload);
 } else {
-   const email = EVENT_DATA.email;
-   const eventPayload = {
-    "token": KL_PUBLIC_KEY,
-    "event": EVENT_DATA.event_name,
-    "customer_properties": {
-      "$email": email
-    },
-    "properties": EVENT_DATA
-  };
-
   log("=======================================================");
   log("No email found in URL. Not sending Klaviyo any data...");
   log("=======================================================");
 }
 
-if (EVENT_DATA["x-ga-mp2-user_properties"].email && EVENT_DATA["x-ga-mp2-user_properties"].id){
-  const email = EVENT_DATA["x-ga-mp2-user_properties"].email;
-  const id = EVENT_DATA["x-ga-mp2-user_properties"].id;
-  log("Customer Email and ID found. Sending Klaviyo an event with $email: " + email + " and $id: " + id);
-  const trackEventPayload = {
-    "token": KL_PUBLIC_KEY,
-    "event": EVENT_DATA.event_name,
-    "customer_properties": {
-      "$email": email,
-      "$id": id
-    },
-    "properties": EVENT_DATA
-  };
-  sendTrackRequest(trackEventPayload);
-} else if (EVENT_DATA["x-ga-mp2-user_properties"].email && !EVENT_DATA["x-ga-mp2-user_properties"].id){
-  const email = EVENT_DATA["x-ga-mp2-user_properties"].email;
-  log("Customer Email found. Sending Klaviyo an event with $email: " + email);
-  const trackEventPayload = {
-    "token": KL_PUBLIC_KEY,
-    "event": EVENT_DATA.event_name,
-    "customer_properties": {
-      "$email": email
-    },
-    "properties": EVENT_DATA
-  };
-  sendTrackRequest(trackEventPayload);
-} else if (!EVENT_DATA["x-ga-mp2-user_properties"].email && EVENT_DATA["x-ga-mp2-user_properties"].id) {
-  const id = EVENT_DATA["x-ga-mp2-user_properties"].id;
-  log("Customer ID found. Sending Klaviyo an event with $id: " + id);
-  const trackEventPayload = {
-    "token": KL_PUBLIC_KEY,
-    "event": EVENT_DATA.event_name,
-    "customer_properties": {
-      "$id": id
-    },
-    "properties": EVENT_DATA
-  };
-  sendTrackRequest(trackEventPayload);
-} else {
-  log("No customer ID or EMAIL found. Not sending Klaviyo any data...");
+if (EVENT_DATA["x-ga-mp2-user_properties"]) {
+  if (EVENT_DATA["x-ga-mp2-user_properties"].email && EVENT_DATA["x-ga-mp2-user_properties"].id){
+    const email = EVENT_DATA["x-ga-mp2-user_properties"].email;
+    const id = EVENT_DATA["x-ga-mp2-user_properties"].id;
+    log("Customer Email and ID found. Sending Klaviyo an event with $email: " + email + " and $id: " + id);
+    const trackEventPayload = {
+      "token": KL_PUBLIC_KEY,
+      "event": EVENT_DATA.event_name,
+      "customer_properties": {
+        "$email": email,
+        "$id": id
+      },
+      "properties": EVENT_DATA
+    };
+    sendTrackRequest(trackEventPayload);
+  } else if (EVENT_DATA["x-ga-mp2-user_properties"].email && !EVENT_DATA["x-ga-mp2-user_properties"].id){
+    const email = EVENT_DATA["x-ga-mp2-user_properties"].email;
+    log("Customer Email found. Sending Klaviyo an event with $email: " + email);
+    const trackEventPayload = {
+      "token": KL_PUBLIC_KEY,
+      "event": EVENT_DATA.event_name,
+      "customer_properties": {
+        "$email": email
+      },
+      "properties": EVENT_DATA
+    };
+    sendTrackRequest(trackEventPayload);
+  } else if (!EVENT_DATA["x-ga-mp2-user_properties"].email && EVENT_DATA["x-ga-mp2-user_properties"].id) {
+    const id = EVENT_DATA["x-ga-mp2-user_properties"].id;
+    log("Customer ID found. Sending Klaviyo an event with $id: " + id);
+    const trackEventPayload = {
+      "token": KL_PUBLIC_KEY,
+      "event": EVENT_DATA.event_name,
+      "customer_properties": {
+        "$id": id
+      },
+      "properties": EVENT_DATA
+    };
+    sendTrackRequest(trackEventPayload);
+  } else {
+    log("No customer ID or EMAIL found. Not sending Klaviyo any data...");
+  }
 }
 
 log("ending script");
@@ -335,4 +327,4 @@ scenarios: []
 
 ___NOTES___
 
-Created on 3/2/2021, 3:32:16 PM
+Created on 3/8/2021, 12:25:02 PM
