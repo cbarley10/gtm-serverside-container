@@ -66,7 +66,6 @@ const parseUrl = require('parseUrl');
 // Constants //
 ///////////////
 
-// const testKEparam = "eyJrbF9lbWFpbCI6ICJjb25ub3J3YmFybGV5QGdtYWlsLmNvbSIsICJrbF9jb21wYW55X2lkIjogIlRwaDNQRCJ9";
 const KL_PUBLIC_KEY = data.public_key;
 const EVENT_DATA = getAllEventData();
 log(EVENT_DATA);
@@ -327,4 +326,6 @@ scenarios: []
 
 ___NOTES___
 
-Created on 3/8/2021, 12:25:02 PM
+Created on 3/10/2021, 5:58:54 PM
+
+
