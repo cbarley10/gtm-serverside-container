@@ -165,10 +165,7 @@ log("starting script");
 // if page_location contains _ke identify user and send Active On Site Metric
 if(getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email && EVENT_DATA.event_name === "page_view"){
   log("-- KE or UTM_EMAIL PARAMETER DETECTED IN URL --");
-  let email;
-  if (getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email){
-    email = getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email;
-  }
+  const email = getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email;
 
   const identifyPayload = {
     "$email": email
@@ -190,7 +187,7 @@ if(getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email && EVENT_DATA.event
   log("=======================================================");
 }
 
-if (getEmailAndId(EVENT_DATA.page_location, EVENT_DATA)) {
+if (getEmailAndId(EVENT_DATA.page_location, EVENT_DATA) && EVENT_DATA.event_name !== "page_view") {
   const email = getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email;
   const id = getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).id;
   if (email && id){
@@ -338,4 +335,4 @@ scenarios: []
 
 ___NOTES___
 
-Created on 3/24/2021, 3:31:51 PM
+Created on 3/24/2021, 3:40:44 PM
