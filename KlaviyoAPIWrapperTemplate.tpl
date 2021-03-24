@@ -18,7 +18,7 @@ ___INFO___
     "id": "brand_dummy",
     "displayName": ""
   },
-  "description": "Test For Il Makiage",
+  "description": "Klaviyo Wrapper for sending events mapped through GA4 into Klaviyo though GTM\u0027s Serverside Container technology.",
   "containerContexts": [
     "SERVER"
   ]
@@ -68,6 +68,7 @@ const parseUrl = require('parseUrl');
 
 const KL_PUBLIC_KEY = data.public_key;
 const EVENT_DATA = getAllEventData();
+const HEADERS = {'user-agent': 'Klaviyo/GTM-Serverside'};
 log(EVENT_DATA);
 
 /////////////
@@ -101,21 +102,40 @@ const normalizeEventNames = name => {
 };
 
 // Handle _ke and utm_email parameters
-const containsKeOrUtmEmail = url => {
+const getEmailAndId = (url, eventData) => {
   const parsedUrl = parseUrl(url);
+  const userProperties = eventData["x-ga-mp2-user_properties"] ? eventData["x-ga-mp2-user_properties"] : "";
   if (parsedUrl.searchParams._ke){
     const email = decodePayload(parsedUrl.searchParams._ke).kl_email;
     return {
-      "email": email
+      "email": email,
+      "id": ""
     };
   } else if (parsedUrl.searchParams.utm_email){
     const email = parsedUrl.searchParams.utm_email;
     return {
-      "email": email
+      "email": email,
+      "id": ""
+    };
+  } else if (userProperties && userProperties.user_data.email_address && userProperties.user_data["x-klaviyo-id"]){
+    return {
+      "email": userProperties.user_data.email_address,
+      "id": userProperties.user_data["x-klaviyo-id"]
+    };
+  } else if (userProperties && userProperties.user_data.email_address && !userProperties.user_data["x-klaviyo-id"]) {
+    return {
+      "email": userProperties.user_data.email_address,
+      "id": ""
+    };
+  } else if (userProperties && !userProperties.user_data.email_address && userProperties.user_data["x-klaviyo-id"]) {
+    return {
+      "email": "",
+      "id": userProperties.user_data["x-klaviyo-id"]
     };
   } else {
     return {
-      email: ""
+      "email": "",
+      "id": ""
     };
   }
 };
@@ -127,19 +147,13 @@ const containsKeOrUtmEmail = url => {
 const sendTrackRequest = payload => {
   const encodedPayload = encodePayload(payload);
   const url = "https://a.klaviyo.com/api/track?data=" + encodedPayload;
-  return sendHttpRequest(url, (statusCode, headers, body) => {
-    setResponseStatus(statusCode);
-    setResponseBody(body);
-   }, {headers: {user_agent: 'Klaviyo/GTM-Serverside'}, method: 'GET', timeout: 500});
+  return sendHttpRequest(url, (statusCode, headers, body) => {}, {headers: HEADERS, method: 'GET'});
 };
 
 const sendIdentifyRequest = payload => {
   const encodedPayload = encodePayload(payload);
   const url = "https://a.klaviyo.com/api/identify?data=" + encodedPayload;
-  return sendHttpRequest(url, (statusCode, headers, body) => {
-    setResponseStatus(statusCode);
-    setResponseBody(body);
-  }, {headers: {user_agent: 'Klaviyo/GTM-Test'}, method: 'GET', timeout: 500 });
+  return sendHttpRequest(url, (statusCode, headers, body) => {}, {headers: HEADERS, method: 'GET'});
 };
 
 ///////////////
@@ -149,17 +163,17 @@ const sendIdentifyRequest = payload => {
 log("starting script");
 
 // if page_location contains _ke identify user and send Active On Site Metric
-if(containsKeOrUtmEmail(EVENT_DATA.page_location).email && EVENT_DATA.event_name === "page_view"){
+if(getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email && EVENT_DATA.event_name === "page_view"){
   log("-- KE or UTM_EMAIL PARAMETER DETECTED IN URL --");
   let email;
-  if (containsKeOrUtmEmail(EVENT_DATA.page_location).email){
-    email = containsKeOrUtmEmail(EVENT_DATA.page_location).email;
+  if (getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email){
+    email = getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email;
   }
 
   const identifyPayload = {
     "$email": email
   };
-  const activeOnSitePayload = {
+  const pageViewedPayload = {
     "token": KL_PUBLIC_KEY,
     "event": "Page Viewed",
     "customer_properties": {
@@ -169,17 +183,17 @@ if(containsKeOrUtmEmail(EVENT_DATA.page_location).email && EVENT_DATA.event_name
   };
 
   sendIdentifyRequest(identifyPayload);
-  sendTrackRequest(activeOnSitePayload);
+  sendTrackRequest(pageViewedPayload);
 } else {
   log("=======================================================");
   log("No email found in URL. Not sending Klaviyo any data...");
   log("=======================================================");
 }
 
-if (EVENT_DATA["x-ga-mp2-user_properties"]) {
-  if (EVENT_DATA["x-ga-mp2-user_properties"].email && EVENT_DATA["x-ga-mp2-user_properties"].id){
-    const email = EVENT_DATA["x-ga-mp2-user_properties"].email;
-    const id = EVENT_DATA["x-ga-mp2-user_properties"].id;
+if (getEmailAndId(EVENT_DATA.page_location, EVENT_DATA)) {
+  const email = getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).email;
+  const id = getEmailAndId(EVENT_DATA.page_location, EVENT_DATA).id;
+  if (email && id){
     log("Customer Email and ID found. Sending Klaviyo an event with $email: " + email + " and $id: " + id);
     const trackEventPayload = {
       "token": KL_PUBLIC_KEY,
@@ -191,8 +205,7 @@ if (EVENT_DATA["x-ga-mp2-user_properties"]) {
       "properties": EVENT_DATA
     };
     sendTrackRequest(trackEventPayload);
-  } else if (EVENT_DATA["x-ga-mp2-user_properties"].email && !EVENT_DATA["x-ga-mp2-user_properties"].id){
-    const email = EVENT_DATA["x-ga-mp2-user_properties"].email;
+  } else if (email && !id){
     log("Customer Email found. Sending Klaviyo an event with $email: " + email);
     const trackEventPayload = {
       "token": KL_PUBLIC_KEY,
@@ -203,8 +216,7 @@ if (EVENT_DATA["x-ga-mp2-user_properties"]) {
       "properties": EVENT_DATA
     };
     sendTrackRequest(trackEventPayload);
-  } else if (!EVENT_DATA["x-ga-mp2-user_properties"].email && EVENT_DATA["x-ga-mp2-user_properties"].id) {
-    const id = EVENT_DATA["x-ga-mp2-user_properties"].id;
+  } else if (!email && id) {
     log("Customer ID found. Sending Klaviyo an event with $id: " + id);
     const trackEventPayload = {
       "token": KL_PUBLIC_KEY,
@@ -326,6 +338,4 @@ scenarios: []
 
 ___NOTES___
 
-Created on 3/10/2021, 5:58:54 PM
-
-
+Created on 3/24/2021, 3:31:51 PM
