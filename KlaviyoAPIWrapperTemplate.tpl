@@ -55,7 +55,6 @@ const JSON = require("JSON");
 const log = require("logToConsole");
 const parseUrl = require('parseUrl');
 const toBase64 = require('toBase64');
-const fromBase64 = require('fromBase64');
 const sendHttpRequest = require('sendHttpRequest');
 const setResponseBody = require('setResponseBody');
 const getAllEventData = require('getAllEventData');
@@ -68,11 +67,18 @@ const encodeUriComponent = require('encodeUriComponent');
 
 const KL_PUBLIC_KEY = data.public_key;
 const EVENT_DATA = getAllEventData();
-const HEADERS = {'user-agent': 'Klaviyo/GTM-Serverside'};
+const HEADERS = {
+  'user-agent': 'Klaviyo/GTM-Serverside',
+  'Accept': 'text/html',
+  'Content-Type': 'application/x-www-form-urlencoded'
+};
 
 /////////////
 // Helpers //
 /////////////
+
+// Encode JSON payload to Base64 in order to send event to Klaviyo
+const encodePayload = payload => encodeUriComponent(toBase64(JSON.stringify(payload)));
 
 // Return only unique values in an array
 const returnUniques = (value, index, self) => {
@@ -95,8 +101,6 @@ const flatten = event => {
   return flattenedObj;
 };
 
-// Encode JSON payload to Base64 in order to send event to Klaviyo
-const encodePayload = payload => encodeUriComponent(toBase64(JSON.stringify(payload)));
 
 // Normalize event names so that they look better in Klaviyo and conform to Klaviyo naming convention
 const normalizeEventNames = name => {
@@ -115,29 +119,26 @@ const normalizeEventNames = name => {
 };
 
 // Build track payload
-const buildPayload = (event, email, exchange_id) => {
-  if (event.hasOwnProperty("ecommerce")){
-    return {
-      "token": KL_PUBLIC_KEY,
-      "event": normalizeEventNames(eventName),
-      "customer_properties": {
-        "$email": user.email ? user.email : "",
-        "$exchange_id": user.exchange_id ? user.exchange_id : ""
-      },
-      "properties": flatten(EVENT_DATA)
-    };
-  } else if (!event.hasOwnProperty("ecommerce")){
-    return {
-      "token": KL_PUBLIC_KEY,
-      "event": normalizeEventNames(eventName),
-      "customer_properties": {
-        "$email": user.email,
-        "$exchange_id": user.exchange_id
-      },
-      "properties": EVENT_DATA
-    };
+const buildPayload = (event, user) => {
+  const customerProperties = {};
+  if (user.id) {
+    customerProperties["$id"] = user.id;
+  }
+  if (user.email) {
+    customerProperties["$email"] = user.email;
+  }
+  if (user.exchange_id) {
+    customerProperties["$exchange_id"] = user.exchange_id;
   }
 
+  log(customerProperties);
+
+  return {
+    "token": KL_PUBLIC_KEY,
+    "event": normalizeEventNames(eventName),
+    "customer_properties": customerProperties,
+    "properties": event.hasOwnProperty("ecommerce") ? flatten(EVENT_DATA) : EVENT_DATA
+  };
 };
 
 // Handle _kx and utm_email parameters
@@ -148,22 +149,26 @@ const getUser = (url, eventData) => {
     const kx = parsedUrl.searchParams._kx;
     return {
       "email": "",
+      "id": "",
       "exchange_id": kx
     };
   } else if (parsedUrl && parsedUrl.searchParams.utm_email){
     const email = parsedUrl.searchParams.utm_email;
     return {
       "email": email,
+      "id": "",
       "exchange_id": ""
     };
-  } else if (userProperties && userProperties.user_data.email_address){
+  } else if (userProperties && userProperties.user_data.user_id){
     return {
-      "email": userProperties.user_data.email_address,
+      "email": "",
+      "id": userProperties.user_data.user_id,
       "exchange_id": ""
     };
   } else {
     return {
       "email": "",
+      "id": "",
       "exchange_id": ""
     };
   }
@@ -176,6 +181,7 @@ const getUser = (url, eventData) => {
 const sendTrackOrIdentifyRequest = (method, payload) => {
   const encodedPayload = encodePayload(payload);
   const url = "https://a.klaviyo.com/api/" + method + "?data=" + encodedPayload;
+  log(url);
   return sendHttpRequest(url, (statusCode, headers, body) => {}, {headers: HEADERS, method: 'GET'});
 };
 
@@ -187,18 +193,18 @@ log("==== STARTING SCRIPT ====");
 const user = getUser(EVENT_DATA.page_location, EVENT_DATA);
 const eventName = EVENT_DATA.event_name;
 
-// if page_location contains _ke identify user and send Active On Site Metric
-if (user.email || user.exchange_id && eventName === "page_view"){
+// if page_location contains _kx identify user and send Active On Site Metric
+if (user.email || user.exchange_id || user.id && eventName === "page_view"){
   log("_kx or utm_email were found. Tracking an event");
-  const payload = buildPayload(EVENT_DATA, user.email, user.exchange_id);
+  const payload = buildPayload(EVENT_DATA, user);
   sendTrackOrIdentifyRequest("track", payload);
-} else if (user.email && eventName !== "page_view") {
-  // if event is not page view, get email and exchange_id and see if they exist
-  log("email found. Tracking an event");
-  const payload = buildPayload(EVENT_DATA, user.email, user.exchange_id);
+} else if (user.id && eventName !== "page_view") {
+  // if event is not page view, get id and exchange_id and see if they exist
+  log("$id found. Tracking an event");
+  const payload = buildPayload(EVENT_DATA, user);
   sendTrackOrIdentifyRequest("track", payload);
 } else {
-  log("No customer $exchange_id or $email found. Not sending Klaviyo any data...");
+  log("No customer $exchange_id, $email, or $id found. Not sending Klaviyo any data...");
 }
 
 log("==== ENDING SCRIPT ====");
@@ -224,6 +230,9 @@ ___SERVER_PERMISSIONS___
           }
         }
       ]
+    },
+    "clientAnnotations": {
+      "isEditedByUser": true
     },
     "isRequired": true
   },
@@ -307,4 +316,4 @@ scenarios: []
 
 ___NOTES___
 
-Created on 8/9/2021, 12:41:35 PM
+Created on 8/11/2021, 1:43:42 PM
