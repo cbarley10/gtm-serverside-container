@@ -38,9 +38,9 @@ const returnUniques = (value, index, self) => {
 
 // pull out nested fields in "items" array of the ecommerce object, and add them as top-level fields
 const flatten = event => {
-  const flattenedObj = event.ecommerce;
+  const flattenedObj = event;
   const objectKeys = [];
-  const ecommerceObjectItems = event.ecommerce.items;
+  const ecommerceObjectItems = event.items;
 
   for(let property in ecommerceObjectItems[0]){
     objectKeys.push(property);
@@ -88,7 +88,7 @@ const buildPayload = (event, user) => {
     "token": KL_PUBLIC_KEY,
     "event": normalizeEventNames(eventName),
     "customer_properties": customerProperties,
-    "properties": event.hasOwnProperty("ecommerce") ? flatten(EVENT_DATA) : EVENT_DATA
+    "properties": event.hasOwnProperty("items") ? flatten(EVENT_DATA) : EVENT_DATA
   };
 };
 
